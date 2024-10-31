@@ -10,6 +10,7 @@
       margin: 0;
       padding: 0;
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
       height: 100vh;
@@ -33,22 +34,24 @@
     const ctx = canvas.getContext('2d');
     let stationaryDevices = {};
 
-    // Connect to the Socket.IO server
-    const socket = io();
+    // Connect to the Socket.IO server (update IP if necessary)
+    const socket = io('http://192.168.165.229:3000'); // Replace with your server IP if needed
 
     // Check if the Socket.IO connection is successful
     socket.on('connect', () => {
       console.log('Connected to Socket.IO server');
     });
 
-    // Update canvas when mobile positions are received
+    // Update canvas with data from server for stationary and mobile devices
     socket.on('updateCanvas', (data) => {
+      console.log('Received stationary and mobile data:', data);
       stationaryDevices = data.stationaryDevices;
       drawCanvas(stationaryDevices, data.bleData);
     });
 
-    // Update canvas when mobile positions are received
+    // Receive mobile device position updates and draw on canvas
     socket.on('updateMobilePositions', (updatedBleData) => {
+      console.log('Received mobile position data:', updatedBleData);
       drawCanvas(stationaryDevices, updatedBleData);
     });
 
@@ -56,39 +59,32 @@
     function drawCanvas(stationaryDevices, mobileDevices) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw stationary devices
+      // Draw stationary devices in red
       for (const key in stationaryDevices) {
-        if (stationaryDevices.hasOwnProperty(key)) {
-          const { x: sx, y: sy } = stationaryDevices[key];
-          drawDevice(key, sx, sy);
-        }
+        const { x, y } = stationaryDevices[key];
+        drawDevice(key, x, y, 'red', 'Stationary');
       }
 
-      // Draw mobile devices
+      // Draw mobile devices in blue
       for (const deviceAddress in mobileDevices) {
-        if (mobileDevices.hasOwnProperty(deviceAddress)) {
-          const position = mobileDevices[deviceAddress].position;
-
-          if (position) {
-            drawDevice(deviceAddress, position.x, position.y, 'blue');
-          } else {
-            // If position is null, skip drawing the device
-            continue;
-          }
+        const position = mobileDevices[deviceAddress].position;
+        if (position) {
+          drawDevice(deviceAddress, position.x, position.y, 'blue', 'Mobile');
         }
       }
     }
 
     // Function to draw a device on the canvas
-    function drawDevice(device, x, y, color = 'red') {
+    function drawDevice(device, x, y, color, label) {
       ctx.beginPath();
       ctx.arc(x, y, 10, 0, 2 * Math.PI);
       ctx.fillStyle = color;
       ctx.fill();
       ctx.stroke();
 
+      // Draw label below the device
       ctx.fillStyle = 'black';
-      ctx.fillText(device, x - 10, y - 15);
+      ctx.fillText(`${label}: ${device}`, x - 20, y - 15);
     }
   </script>
 </body>
