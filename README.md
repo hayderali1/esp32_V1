@@ -16,5 +16,6 @@ This is often determined experimentally and reflects the transmitted power when 
 n: The path-loss exponent, which represents how much the signal attenuates as it travels through the environment. This varies based on surroundings:
 
 n = 2: Free space (e.g., outdoors or unobstructed areas)
+
 n > 2: Environments with obstacles (e.g., indoors with walls)
 
