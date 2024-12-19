@@ -1,1 +1,127 @@
 
+const express = require('express');
+const http = require('http');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const socketIo = require('socket.io');
+const fs = require('fs');
+const xlsx = require('xlsx');
+
+const app = express();
+const server = http.createServer(app);
+
+// Enable CORS to allow requests from http://localhost:3000
+app.use(cors({
+  origin: 'http://localhost:3000',
+  methods: ['GET', 'POST'],
+  credentials: true
+}));
+
+const io = socketIo(server, {
+  cors: {
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
+// Middleware setup
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Kalman filter implementation
+class KalmanFilter {
+  constructor(r = 1, q = 1) {
+    this.r = r; // Measurement noise covariance
+    this.q = q; // Process noise covariance
+    this.x = 0; // Value
+    this.p = 1; // Estimation error covariance
+    this.k = 0; // Kalman gain
+  }
+
+  filter(z) {
+    // Prediction update
+    this.p = this.p + this.q;
+
+    // Measurement update
+    this.k = this.p / (this.p + this.r);
+    this.x = this.x + this.k * (z - this.x);
+    this.p = (1 - this.k) * this.p;
+
+    return this.x;
+  }
+}
+
+const kalmanFilters = {};
+
+// Function to append RSSI and filtered RSSI data to a single Excel file
+function appendToExcel(deviceAddress, rssi, filteredRssi) {
+  const filePath = './rssi_data.xlsx';
+
+  // Create a new workbook or load the existing one
+  let workbook;
+  if (fs.existsSync(filePath)) {
+    workbook = xlsx.readFile(filePath);
+  } else {
+    workbook = xlsx.utils.book_new();
+    workbook.SheetNames.push('RSSI Data');
+    workbook.Sheets['RSSI Data'] = xlsx.utils.aoa_to_sheet([['Device', 'RSSI', 'Filtered RSSI']]);
+  }
+
+  // Get the worksheet
+  const worksheet = workbook.Sheets['RSSI Data'];
+
+  // Find the next empty row
+  const range = xlsx.utils.decode_range(worksheet['!ref']);
+  const nextRow = range.e.r + 1;
+
+  // Append the data
+  const newData = [[deviceAddress, rssi, filteredRssi]];
+  xlsx.utils.sheet_add_aoa(worksheet, newData, { origin: -1 });
+
+  // Update the range
+  worksheet['!ref'] = xlsx.utils.encode_range({ s: range.s, e: { c: range.e.c, r: nextRow } });
+
+  // Save the file
+  xlsx.writeFile(workbook, filePath);
+}
+
+// Endpoint to update RSSI data from the stationary ESP32
+app.post('/update-location', (req, res) => {
+  const { device: deviceAddress, rssi } = req.body;
+
+  if (!deviceAddress || !rssi) {
+    return res.status(400).send('Missing device address or RSSI');
+  }
+
+  console.log(`Received data for device: ${deviceAddress}, RSSI: ${rssi}`);
+
+  // Initialize Kalman filter for the device if not already done
+  if (!kalmanFilters[deviceAddress]) {
+    kalmanFilters[deviceAddress] = new KalmanFilter();
+  }
+
+  // Apply Kalman filter
+  const filteredRssi = kalmanFilters[deviceAddress].filter(Number(rssi));
+  console.log(`Filtered RSSI for device ${deviceAddress}: ${filteredRssi}`);
+
+  // Append the original and filtered data to the same Excel file
+  appendToExcel(deviceAddress, rssi, filteredRssi);
+
+  res.sendStatus(200);
+});
+
+// Handle client connections
+io.on('connection', (socket) => {
+  console.log('A client connected');
+
+  socket.on('disconnect', () => {
+    console.log('A client disconnected');
+  });
+});
+
+// Start the server
+const PORT = 3000;
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
