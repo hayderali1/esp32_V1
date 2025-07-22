@@ -2,6 +2,7 @@
 
 # Log-Distance Path Loss Model
 
+
 The function applies the log-distance path loss model, which is a standard way to estimate distance based on signal strength. The formula used in calculateDistance(rssi) is:
 
 <img width="200" alt="image" src="https://github.com/user-attachments/assets/38edb46d-36e5-450c-b754-db7f5b72f922">
